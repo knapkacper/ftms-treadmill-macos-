@@ -80,6 +80,13 @@ enum Metryka: String, CaseIterable {
         }
     }
 
+    var naWykresie: Bool {
+        switch self {
+            case .distance: return false
+            default: return true
+        }
+    }
+
     var miejscaPoPrzecinku: Int {
         switch self {
             case .speed, .averageSpeed, .met, .inclination, .pace: return 1
