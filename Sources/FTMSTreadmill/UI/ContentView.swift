@@ -106,7 +106,7 @@ struct PasekStanu: View {
 
             Spacer()
 
-            SubtelnyPrzycisk(tytul: "Historia") { stan.pokazHistorie = true }
+            SubtelnyPrzycisk(tytul: "History") { stan.pokazHistorie = true }
         }
         .padding(.horizontal, 28)
         .padding(.top, 28)
@@ -138,7 +138,7 @@ struct Zegar: View {
     var body: some View {
         HStack(alignment: .center, spacing: 40) {
             DuzaWartosc(
-                tytul: "Dystans",
+                tytul: "Distance",
                 wartosc: String(t.sesja.dystans),
                 jednostka: "m"
             )
@@ -163,7 +163,7 @@ struct Zegar: View {
             .frame(minWidth: 210)
 
             DuzaWartosc(
-                tytul: "Kalorie",
+                tytul: "Calories",
                 wartosc: String(format: "%.1f", t.sesja.kcal),
                 jednostka: "kcal"
             )
@@ -206,7 +206,7 @@ struct Sterowanie: View {
     var body: some View {
         VStack(spacing: 24) {
             VStack(spacing: 2) {
-                Text("ZADANA")
+                Text("TARGET")
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(1.4)
                     .foregroundStyle(Kolory.przygaszony)
@@ -226,7 +226,7 @@ struct Sterowanie: View {
                     .font(.system(size: 10))
                     .foregroundStyle(Kolory.przygaszony)
 
-                Text(String(format: "aktualna %.1f km/h", t.current.speed))
+                Text(String(format: "current %.1f km/h", t.current.speed))
                     .font(.system(size: 12, weight: .medium))
                     .monospacedDigit()
                     .foregroundStyle(Kolory.przygaszony)
@@ -237,11 +237,11 @@ struct Sterowanie: View {
                 if t.trainingStatus.isRunning {
                     PrzyciskAkcji(tytul: "STOP", glowny: true) { t.stop() }
                 } else {
-                    PrzyciskAkcji(tytul: t.sesja.maDane ? "WZNÓW" : "START", glowny: true) { t.start() }
+                    PrzyciskAkcji(tytul: t.sesja.maDane ? "RESUME" : "START", glowny: true) { t.start() }
                 }
 
                 if t.sesja.maDane {
-                    PrzyciskAkcji(tytul: t.konczenie ? "ZATRZYMUJĘ..." : "ZAKOŃCZ", glowny: false) {
+                    PrzyciskAkcji(tytul: t.konczenie ? "STOPPING..." : "FINISH", glowny: false) {
                         t.zakonczTrening { sesja in
                             stan.ostatniePodsumowanie = Historia.zapisz(sesja)
                         }
@@ -306,17 +306,17 @@ struct Podsumowanie: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            Text("TRENING ZAKOŃCZONY")
+            Text("WORKOUT COMPLETE")
                 .font(.system(size: 10, weight: .semibold))
                 .tracking(2)
                 .foregroundStyle(.white)
 
             HStack(spacing: 34) {
-                PoleWyniku(tytul: "Czas", wartosc: trening.czasSformatowany)
-                PoleWyniku(tytul: "Dystans", wartosc: "\(trening.distance) m")
-                PoleWyniku(tytul: "Kalorie", wartosc: String(format: "%.1f", trening.kcal))
-                PoleWyniku(tytul: "Śr. prędkość", wartosc: String(format: "%.1f", trening.avgSpeed))
-                PoleWyniku(tytul: "Maks.", wartosc: String(format: "%.1f", trening.maxSpeed))
+                PoleWyniku(tytul: "Time", wartosc: trening.czasSformatowany)
+                PoleWyniku(tytul: "Distance", wartosc: "\(trening.distance) m")
+                PoleWyniku(tytul: "Calories", wartosc: String(format: "%.1f", trening.kcal))
+                PoleWyniku(tytul: "Avg speed", wartosc: String(format: "%.1f", trening.avgSpeed))
+                PoleWyniku(tytul: "Max", wartosc: String(format: "%.1f", trening.maxSpeed))
             }
 
             Text(trening.tcxFile)
@@ -325,7 +325,7 @@ struct Podsumowanie: View {
                 .textSelection(.enabled)
 
             Button(action: zamknij) {
-                Text("ZAMKNIJ")
+                Text("CLOSE")
                     .font(.system(size: 12, weight: .bold))
                     .tracking(1.4)
                     .frame(maxWidth: .infinity)
@@ -369,12 +369,12 @@ struct WidokHistorii: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("HISTORIA")
+                Text("HISTORY")
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(2)
                     .foregroundStyle(.white)
                 Spacer()
-                SubtelnyPrzycisk(tytul: "Zamknij", akcja: zamknij)
+                SubtelnyPrzycisk(tytul: "Close", akcja: zamknij)
             }
             .padding(.horizontal, 28)
             .padding(.top, 28)
@@ -383,12 +383,12 @@ struct WidokHistorii: View {
             ScrollView {
                 VStack(spacing: 5) {
                     HStack {
-                        Text("DATA").frame(width: 150, alignment: .leading)
-                        Text("CZAS").frame(width: 70, alignment: .trailing)
-                        Text("DYSTANS").frame(width: 90, alignment: .trailing)
+                        Text("DATE").frame(width: 150, alignment: .leading)
+                        Text("TIME").frame(width: 70, alignment: .trailing)
+                        Text("DISTANCE").frame(width: 90, alignment: .trailing)
                         Text("KCAL").frame(width: 70, alignment: .trailing)
-                        Text("ŚR.").frame(width: 70, alignment: .trailing)
-                        Text("MAKS.").frame(width: 70, alignment: .trailing)
+                        Text("AVG").frame(width: 70, alignment: .trailing)
+                        Text("MAX").frame(width: 70, alignment: .trailing)
                         Spacer()
                     }
                     .font(.system(size: 9, weight: .semibold))
@@ -413,7 +413,7 @@ struct WidokHistorii: View {
                     }
 
                     if stan.treningi.isEmpty {
-                        Text("Brak zapisanych treningów")
+                        Text("No saved workouts")
                             .font(.system(size: 12))
                             .foregroundStyle(Kolory.przygaszony)
                             .padding(.top, 40)

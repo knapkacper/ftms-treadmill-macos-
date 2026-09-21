@@ -53,16 +53,16 @@ enum Metryka: String, CaseIterable {
 
     var nazwa: String {
         switch self {
-            case .speed: return "Prędkość"
-            case .averageSpeed: return "Średnia prędkość"
-            case .distance: return "Odległość"
-            case .kcal: return "Kalorie"
-            case .kcalPerHour: return "Kalorie na godzinę"
-            case .heartRate: return "Tętno"
-            case .pace: return "Tempo"
+            case .speed: return "Speed"
+            case .averageSpeed: return "Average speed"
+            case .distance: return "Distance"
+            case .kcal: return "Calories"
+            case .kcalPerHour: return "Calories per hour"
+            case .heartRate: return "Heart rate"
+            case .pace: return "Pace"
             case .met: return "MET"
-            case .inclination: return "Nachylenie"
-            case .power: return "Moc"
+            case .inclination: return "Incline"
+            case .power: return "Power"
         }
     }
 

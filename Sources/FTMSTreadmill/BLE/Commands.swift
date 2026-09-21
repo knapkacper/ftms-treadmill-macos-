@@ -30,10 +30,10 @@ enum OdpowiedziBiezni: UInt8 {
     var opis: String {
         switch self {
             case .ok: return "OK"
-            case .nieobslugiwane: return "Nieobslugiwane"
-            case .zlyParametr: return "Zly parametr"
-            case .brakKontroli: return "Brak kontroli"
-            case .pozaZakresem: return "Poza zakresem"
+            case .nieobslugiwane: return "Not supported"
+            case .zlyParametr: return "Invalid parameter"
+            case .brakKontroli: return "Control not permitted"
+            case .pozaZakresem: return "Out of range"
         }
     }
 }

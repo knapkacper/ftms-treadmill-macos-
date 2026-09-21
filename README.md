@@ -140,7 +140,7 @@ Sources/FTMSTreadmill/
 └── UI/                       SwiftUI
 ```
 
-Source comments and identifiers are Polish.
+UI strings are English; source comments and identifiers are Polish.
 
 ## Notes
 
