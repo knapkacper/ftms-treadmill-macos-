@@ -1,187 +1,141 @@
 # Bieżnia
 
-Aplikacja na macOS, która łączy się z bieżnią po Bluetooth Low Energy, pokazuje dane treningu na żywo,
-steruje prędkością i zapisuje trening do pliku TCX (import do Stravy, Garmin Connect itp.).
+Otwarta apka BLE do sterowania bieżnią z macOS. Bez apki producenta, bez konta, bez chmury.
+Swift + SwiftUI, zero zależności, sam `CoreBluetooth`.
 
-Napisana w Swift + SwiftUI, bez zewnętrznych zależności — tylko `CoreBluetooth` z systemu.
+![Bieżnia](https://i.imgur.com/siYGcRq.png)
 
-![Bieżnia — widok treningu](https://i.imgur.com/siYGcRq.png)
+## 1. Protokół
 
----
+Dwie usługi wystawione równolegle:
 
-## 1. Na jakim protokole działa bieżnia
-
-Bieżnia jest urządzeniem **Bluetooth Low Energy (BLE)**. Nie ma tu "parowania" jak przy słuchawkach —
-urządzenie rozgłasza (*advertising*) swoje usługi, aplikacja je znajduje, łączy się i nasłuchuje powiadomień.
-
-Bieżnia wystawia dwa kanały równolegle:
-
-| Kanał | UUID usługi | Co to jest |
+| Usługa | UUID | Opis |
 |---|---|---|
-| **FTMS** (Fitness Machine Service) | `0x1826` | Oficjalny, standardowy profil Bluetooth SIG dla sprzętu fitness (bieżnie, rowerki, orbitreki). Działa tak samo u każdego producenta, który go wspiera. |
-| **Fitshow** | `0xFFF0` | Prywatny kanał producenta (tzw. *vendor-specific*). Nieudokumentowany, format odczytany z ramek. Tania elektronika często wysyła tędy dane dokładniejsze niż przez FTMS. |
+| FTMS (Fitness Machine Service) | `0x1826` | standard Bluetooth SIG, przenośny między producentami |
+| Fitshow | `0xFFF0` | kanał producenta, nieudokumentowany, format zdjęty z ramek |
 
-Aplikacja skanuje tylko po `0x1826`, a po połączeniu sprawdza, które kanały urządzenie faktycznie ma
-(`Capabilities` w `TreadmillClient.swift`). Jeśli jest tylko Fitshow — aplikacja i tak pokazuje dane, ale bez sterowania.
+Skan leci po `0x1826`. Po połączeniu `Capabilities` (`TreadmillClient.swift`) ustala, co urządzenie faktycznie wystawia.
+Sam Fitshow: dane lecą, sterowania brak.
 
-### Charakterystyki FTMS używane przez aplikację
-
-Charakterystyka to pojedynczy "kanał danych" wewnątrz usługi. Ma swój UUID i tryb pracy: odczyt, zapis albo powiadomienia.
-
-| UUID | Nazwa | Tryb | Do czego służy |
+| UUID | Charakterystyka | Tryb | Zawartość |
 |---|---|---|---|
-| `0x2ACD` | Treadmill Data | notify | Dane na żywo: prędkość, dystans, czas, kalorie, tętno, moc |
-| `0x2AD9` | Fitness Machine Control Point | write + notify | Wysyłanie komend (start, stop, prędkość) i odbieranie odpowiedzi |
-| `0x2ADA` | Fitness Machine Status | notify | Zdarzenia od bieżni: start, pauza, zatrzymanie przez użytkownika |
-| `0x2AD3` | Training Status | read + notify | Faza treningu: gotowa / odliczanie / bieg / zwalnianie |
-| `0x2AD4` | Supported Speed Range | read | Min., maks. prędkość i krok zmiany (u nas 1,0–6,0 km/h, krok 0,1) |
-| `0x2ACC` | Fitness Machine Feature | read | Mapa bitowa: co bieżnia umie nadawać i co da się jej ustawić |
+| `0x2ACD` | Treadmill Data | notify | prędkość, dystans, czas, kalorie, tętno, moc |
+| `0x2AD9` | Fitness Machine Control Point | write, notify | komendy i kody odpowiedzi |
+| `0x2ADA` | Fitness Machine Status | notify | zdarzenia maszyny |
+| `0x2AD3` | Training Status | read, notify | faza treningu |
+| `0x2AD4` | Supported Speed Range | read | min, max, krok |
+| `0x2ACC` | Fitness Machine Feature | read | mapa bitowa możliwości |
 
----
+## 2. Zakres implementacji
 
-## 2. Jakie funkcje protokołu wspiera aplikacja
+### Odczyt `0x2ACD`
 
-### Odczyt danych (`0x2ACD`)
+16-bitowe flagi, pola opcjonalne w stałej kolejności, little-endian (`odczytajDaneBiezni`, `ByteReader`).
 
-Ramka zaczyna się od 16-bitowych **flag**. Każdy bit mówi, czy dalej w ramce jest dane pole.
-Pola występują zawsze w tej samej kolejności, więc parser czyta je po kolei i pomija te, których bit jest wyłączony
-(`odczytajDaneBiezni` w `TreadmillData.swift`).
-
-Obsłużone bity flag:
-
-| Bit | Pole | Rozmiar | Skala |
+| Bit | Pole | Typ | Skala |
 |---|---|---|---|
-| 0 | prędkość chwilowa *(odwrotny: 0 = pole obecne)* | uint16 | ÷100 → km/h |
+| 0 | prędkość chwilowa (bit odwrócony: 0 = pole obecne) | uint16 | ÷100 km/h |
 | 1 | prędkość średnia | uint16 | ÷100 |
-| 2 | dystans całkowity | uint24 | metry |
-| 3 | nachylenie + kąt rampy | int16 ×2 | ÷10 |
-| 4 | wzniesienie w górę / w dół | uint16 ×2 | ÷10 |
+| 2 | dystans | uint24 | m |
+| 3 | nachylenie, kąt rampy | int16 ×2 | ÷10 |
+| 4 | wzniesienie w górę, w dół | uint16 ×2 | ÷10 |
 | 5 | tempo chwilowe | uint8 | ÷10 |
 | 6 | tempo średnie | uint8 | ÷10 |
-| 7 | kalorie + kcal/h + kcal/min | uint16, uint16, uint8 | wartości `0xFFFF` / `0xFF` = brak danych |
-| 8 | tętno | uint8 | bpm (0 = brak pasa) |
+| 7 | kcal, kcal/h, kcal/min | uint16, uint16, uint8 | `0xFFFF` i `0xFF` = brak |
+| 8 | tętno | uint8 | bpm, 0 = brak pasa |
 | 9 | MET | uint8 | ÷10 |
-| 10 | czas treningu | uint16 | sekundy |
-| 11 | czas pozostały | uint16 | sekundy |
-| 12 | siła na pasie + moc | int16 ×2 | N / W |
+| 10 | czas treningu | uint16 | s |
+| 11 | czas pozostały | uint16 | s |
+| 12 | siła na pasie, moc | int16 ×2 | N, W |
 
-Wszystkie liczby są **little-endian** — młodszy bajt pierwszy (`ByteReader.swift`).
-Nachylenie może być ujemne, więc czytane jest jako liczba ze znakiem (uzupełnienie do dwóch).
+Nachylenie ze znakiem, uzupełnienie do dwóch.
 
-### Sterowanie (`0x2AD9`)
+### Sterowanie `0x2AD9`
 
-FTMS wymaga, żeby najpierw *poprosić o kontrolę* — dopiero potem bieżnia przyjmie komendy
-(`Commands.swift`).
+Bez `Request Control` maszyna odrzuca komendy kodem `04`.
 
-| Komenda | Bajty | Znaczenie |
-|---|---|---|
-| Request Control | `00` | przejęcie kontroli nad maszyną, wysyłane raz po połączeniu |
-| Start / Resume | `07` | start pasa |
-| Stop | `08 01` | zatrzymanie |
-| Pause | `08 02` | pauza |
-| Set Target Speed | `02 LL HH` | prędkość ×100, little-endian (np. 6,0 km/h → `02 58 02`) |
+| Komenda | Bajty |
+|---|---|
+| Request Control | `00` |
+| Start / Resume | `07` |
+| Stop | `08 01` |
+| Pause | `08 02` |
+| Set Target Speed | `02 LL HH` (km/h ×100, LE) |
 
-Bieżnia odpowiada ramką `80 <komenda> <wynik>`:
-`01` OK, `02` nieobsługiwane, `03` zły parametr, `04` brak kontroli, `05` poza zakresem.
+Odpowiedź: `80 <op> <kod>`. Kody: `01` ok, `02` nieobsługiwane, `03` zły parametr, `04` brak kontroli, `05` poza zakresem.
 
-### Wykrywanie możliwości (`0x2ACC`)
+### Możliwości `0x2ACC`
 
-Zamiast zakładać, co bieżnia potrafi, aplikacja odczytuje mapę bitową i dopiero na jej podstawie
-pokazuje kafelki i strzałki prędkości w interfejsie (`Features.swift`).
+UI renderuje kafelki i sterowanie na podstawie mapy bitowej, nie na sztywno (`Features.swift`).
 
-Przykład z testowanego urządzenia — `c4 56 00 00 0f 00 00 00`:
+Testowane urządzenie zwraca `c4 56 00 00 0f 00 00 00`:
 
-- nadaje (`0x000056C4`): dystans, liczba kroków, opór, kalorie, tętno, czas, moc
-- da się ustawić (`0x0000000F`): prędkość, nachylenie, opór, moc
+* nadaje `0x000056C4`: dystans, kroki, opór, kalorie, tętno, czas, moc
+* przyjmuje `0x0000000F`: prędkość, nachylenie, opór, moc
 
-### Kanał Fitshow (`0xFFF1`)
+### Fitshow `0xFFF1`
 
-Prosta ramka z ogranicznikami i sumą kontrolną XOR (`FitshowFrame.swift`):
+STX/ETX, checksum XOR (`FitshowFrame.swift`):
 
 ```
 02 51 03 3c 00 13 00 0d 00 09 00 00 00 00 00 79 03
-│  │  │  └─┬─┘ └─┬─┘ └─┬─┘ └─┬─┘ └───┬────┘ │  └─ ETX, koniec ramki
-│  │  │    │     │     │     │       │      └─ suma kontrolna (XOR bajtów środka)
-│  │  │    │     │     │     │       └─ 5 zer: miejsce na tętno i nachylenie
-│  │  │    │     │     │     └─ kalorie ×0,1 → 0,9 kcal
-│  │  │    │     │     └─ dystans: 13 m
-│  │  │    │     └─ czas: 19 s
-│  │  │    └─ prędkość ×0,1 → 6,0 km/h
-│  │  └─ status maszyny
-│  └─ typ ramki (zawsze 0x51)
-└─ STX, początek ramki
+│  │  │  └─┬─┘ └─┬─┘ └─┬─┘ └─┬─┘ └───┬────┘ │  └─ ETX
+│  │  │    │     │     │     │       │      └─ XOR bajtów środka
+│  │  │    │     │     │     │       └─ 5 zer: tętno i nachylenie, nieobsadzone
+│  │  │    │     │     │     └─ kcal ×0,1
+│  │  │    │     │     └─ dystans [m]
+│  │  │    │     └─ czas [s]
+│  │  │    └─ prędkość ×0,1
+│  │  └─ status
+│  └─ typ ramki, stałe 0x51
+└─ STX
 ```
 
-Krótsza ramka (`status 0x02`) niesie cyfrę odliczania przed startem: `02 51 02 05 56 03` → "5".
+Status `0x02` skraca ramkę do odliczania: `02 51 02 05 56 03`.
 
-Kiedy dostępne są oba kanały, FTMS jest źródłem podstawowym, a z Fitshow brane są tylko
-dokładne kalorie (ułamkowe) i odliczanie — czyli to, czego FTMS w tym modelu nie podaje.
+Przy obu kanałach FTMS jest źródłem prawdy, z Fitshow brane są tylko kalorie ułamkowe i odliczanie,
+czyli czego FTMS w tym modelu nie podaje.
 
----
+## 3. Aplikacja
 
-## 3. Co robi aplikacja
-
-- **Automatyczne łączenie** — skan po usłudze `0x1826`, łączenie z pierwszym znalezionym urządzeniem,
-  ponowna próba co 2 s po rozłączeniu.
-- **Podgląd na żywo** — kafelki z prędkością, dystansem, czasem, kaloriami, tempem, MET, tętnem, mocą;
-  pokazywane są tylko te metryki, które urządzenie faktycznie nadaje.
-- **Sterowanie** — start, stop, prędkość +/- w granicach zwróconych przez `0x2AD4`.
-- **Licznik sesji** — trening podzielony na segmenty (bieżnia zeruje swoje liczniki po każdym stopie),
-  aplikacja je sumuje, więc pauza nie kasuje wyniku.
-- **Zapis treningu** — po zakończeniu powstają dwa pliki w `~/treningi/`:
-  `.tcx` (format Garmin Training Center, do importu w Stravie) i `.json` z podsumowaniem do historii w aplikacji.
-
-### Zrzut ekranu
-
-![Interfejs aplikacji](https://i.imgur.com/siYGcRq.png)
-
-Ciemny interfejs bez paska tytułu, kafelki metryk pokazywane dynamicznie — tylko te, które bieżnia nadaje.
-
-### Struktura projektu
+* autoskan po `0x1826`, reconnect co 2 s
+* kafelki filtrowane przez `Features`, pokazywane tylko realne metryki
+* sterowanie w granicach z `0x2AD4`
+* sesja cięta na segmenty, bo bieżnia zeruje liczniki po każdym stopie; pauza nie kasuje wyniku
+* eksport do `~/treningi/`: `.tcx` (Garmin TCD v2, wchodzi do Stravy) + `.json` na historię
 
 ```
 Sources/Bieznia/
 ├── BLE/
 │   ├── UUIDs.swift           identyfikatory usług i charakterystyk
-│   ├── ByteReader.swift      odczyt little-endian z bufora
-│   ├── Commands.swift        komendy wysyłane do bieżni i kody odpowiedzi
-│   ├── Features.swift        dekodowanie mapy możliwości (0x2ACC)
-│   ├── TreadmillData.swift   parser ramki danych FTMS (0x2ACD)
-│   ├── FitshowFrame.swift    parser ramki producenta (0xFFF1)
-│   ├── TrainingStatus.swift  fazy treningu (0x2AD3)
-│   └── TreadmillClient.swift połączenie, stan, logika sesji
-├── Export.swift              zapis TCX + JSON, historia treningów
-└── UI/                       interfejs SwiftUI
+│   ├── ByteReader.swift      odczyt little-endian
+│   ├── Commands.swift        komendy i kody odpowiedzi
+│   ├── Features.swift        dekoder 0x2ACC
+│   ├── TreadmillData.swift   parser 0x2ACD
+│   ├── FitshowFrame.swift    parser 0xFFF1
+│   ├── TrainingStatus.swift  fazy treningu 0x2AD3
+│   └── TreadmillClient.swift połączenie, stan, sesja
+├── Export.swift              TCX, JSON, historia
+└── UI/                       SwiftUI
 ```
 
-## Wymagania i uruchomienie
+## Build
 
-- macOS 13 lub nowszy
-- **Swift 5.10+** — [pobierz instalator ze swift.org](https://www.swift.org/install/macos/)
-  (alternatywnie [Xcode z App Store](https://apps.apple.com/app/xcode/id497799835), który zawiera Swift w komplecie)
-- bieżnia z Bluetooth LE wspierająca FTMS
-
-Sprawdzenie, czy Swift jest już w systemie:
+macOS 13+, [Swift 5.10+](https://www.swift.org/install/macos/) albo [Xcode](https://apps.apple.com/app/xcode/id497799835).
 
 ```bash
-swift --version
-```
-
-```bash
-./build-app.sh          # buduje i instaluje ~/Applications/Bieznia.app
+./build-app.sh
 open ~/Applications/Bieznia.app
 ```
 
-Skrypt tworzy pakiet `.app` razem z `Info.plist` — wpis `NSBluetoothAlwaysUsageDescription` jest konieczny,
-inaczej macOS nie da aplikacji dostępu do Bluetooth. Podpis to podpis lokalny (*ad-hoc*).
-
-Sam `swift build && swift run` też zadziała, ale jako goły plik wykonywalny — system może wtedy odmówić dostępu do Bluetooth.
+Skrypt składa bundla z `Info.plist` i podpisem ad-hoc. Bez `NSBluetoothAlwaysUsageDescription` system utnie dostęp do BLE,
+więc gołe `swift run` zadziała tylko jako proces bez uprawnień.
 
 ## Uwagi
 
-Projekt testowany na jednym modelu bieżni. Parser FTMS jest zgodny ze specyfikacją Bluetooth SIG,
-więc powinien działać z innymi urządzeniami, natomiast kanał Fitshow (`0xFFF0`) jest specyficzny dla producenta.
+Parser FTMS zgodny ze specyfikacją SIG, powinien wejść na inny sprzęt. Fitshow jest związany z konkretnym producentem.
+Testowane na jednym modelu.
 
 ## Licencja
 
-[MIT](LICENSE) — rób z tym co chcesz, bez gwarancji.
+[MIT](LICENSE). Ikona pochodzi z clipartmax, licencja osobna od kodu.
