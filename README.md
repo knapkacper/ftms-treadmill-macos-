@@ -1,60 +1,81 @@
-# Bieżnia
+# ftms-treadmill-macos
 
-Otwarta apka BLE do sterowania bieżnią z macOS. Bez apki producenta, bez konta, bez chmury.
-Swift + SwiftUI, zero zależności, sam `CoreBluetooth`.
+Open source BLE app to control your treadmill from macOS. No vendor app, no account, no cloud.
+Swift + SwiftUI, no dependencies, plain `CoreBluetooth`.
 
-![Bieżnia](https://i.imgur.com/siYGcRq.png)
+![FTMS Treadmill](https://i.imgur.com/siYGcRq.png)
 
-## 1. Protokół
+## Install
 
-Dwie usługi wystawione równolegle:
+```bash
+git clone https://github.com/knapkacper/ftms-treadmill-macos-.git
+cd ftms-treadmill-macos-
+./build-app.sh
+open ~/Applications/FTMSTreadmill.app
+```
 
-| Usługa | UUID | Opis |
+Update:
+
+```bash
+cd ftms-treadmill-macos-
+git pull
+./build-app.sh
+```
+
+macOS 13+, [Swift 5.10+](https://www.swift.org/install/macos/) or [Xcode](https://apps.apple.com/app/xcode/id497799835).
+`build-app.sh` produces an ad-hoc signed bundle. `NSBluetoothAlwaysUsageDescription` lives in its `Info.plist`,
+so a bare `swift run` gets no BLE access.
+
+## 1. Protocol
+
+Two services advertised in parallel:
+
+| Service | UUID | Notes |
 |---|---|---|
-| FTMS (Fitness Machine Service) | `0x1826` | standard Bluetooth SIG, przenośny między producentami |
-| Fitshow | `0xFFF0` | kanał producenta, nieudokumentowany, format zdjęty z ramek |
+| FTMS (Fitness Machine Service) | `0x1826` | Bluetooth SIG standard, portable across vendors |
+| Fitshow | `0xFFF0` | vendor channel, undocumented, format lifted off the wire |
 
-Skan leci po `0x1826`. Po połączeniu `Capabilities` (`TreadmillClient.swift`) ustala, co urządzenie faktycznie wystawia.
-Sam Fitshow: dane lecą, sterowania brak.
+Scan targets `0x1826`. After connect, `Capabilities` (`TreadmillClient.swift`) resolves what the device actually exposes.
+Fitshow only: data flows, no control.
 
-| UUID | Charakterystyka | Tryb | Zawartość |
+| UUID | Characteristic | Mode | Payload |
 |---|---|---|---|
-| `0x2ACD` | Treadmill Data | notify | prędkość, dystans, czas, kalorie, tętno, moc |
-| `0x2AD9` | Fitness Machine Control Point | write, notify | komendy i kody odpowiedzi |
-| `0x2ADA` | Fitness Machine Status | notify | zdarzenia maszyny |
-| `0x2AD3` | Training Status | read, notify | faza treningu |
-| `0x2AD4` | Supported Speed Range | read | min, max, krok |
-| `0x2ACC` | Fitness Machine Feature | read | mapa bitowa możliwości |
+| `0x2ACD` | Treadmill Data | notify | speed, distance, time, calories, heart rate, power |
+| `0x2AD9` | Fitness Machine Control Point | write, notify | commands and response codes |
+| `0x2ADA` | Fitness Machine Status | notify | machine events |
+| `0x2AD3` | Training Status | read, notify | workout phase |
+| `0x2AD4` | Supported Speed Range | read | min, max, step |
+| `0x2ACC` | Fitness Machine Feature | read | capability bitmap |
 
-## 2. Zakres implementacji
+## 2. Implemented surface
 
-### Odczyt `0x2ACD`
+### Read `0x2ACD`
 
-16-bitowe flagi, pola opcjonalne w stałej kolejności, little-endian (`odczytajDaneBiezni`, `ByteReader`).
+16-bit flags, optional fields in fixed order, little endian (`odczytajDaneBiezni`, `ByteReader`).
 
-| Bit | Pole | Typ | Skala |
+| Bit | Field | Type | Scale |
 |---|---|---|---|
-| 0 | prędkość chwilowa (bit odwrócony: 0 = pole obecne) | uint16 | ÷100 km/h |
-| 1 | prędkość średnia | uint16 | ÷100 |
-| 2 | dystans | uint24 | m |
-| 3 | nachylenie, kąt rampy | int16 ×2 | ÷10 |
-| 4 | wzniesienie w górę, w dół | uint16 ×2 | ÷10 |
-| 5 | tempo chwilowe | uint8 | ÷10 |
-| 6 | tempo średnie | uint8 | ÷10 |
-| 7 | kcal, kcal/h, kcal/min | uint16, uint16, uint8 | `0xFFFF` i `0xFF` = brak |
-| 8 | tętno | uint8 | bpm, 0 = brak pasa |
+| 0 | instantaneous speed (inverted: 0 = field present) | uint16 | ÷100 km/h |
+| 1 | average speed | uint16 | ÷100 |
+| 2 | total distance | uint24 | m |
+| 3 | inclination, ramp angle | int16 ×2 | ÷10 |
+| 4 | elevation gain, loss | uint16 ×2 | ÷10 |
+| 5 | instantaneous pace | uint8 | ÷10 |
+| 6 | average pace | uint8 | ÷10 |
+| 7 | kcal, kcal/h, kcal/min | uint16, uint16, uint8 | `0xFFFF` and `0xFF` mean absent |
+| 8 | heart rate | uint8 | bpm, 0 = no strap |
 | 9 | MET | uint8 | ÷10 |
-| 10 | czas treningu | uint16 | s |
-| 11 | czas pozostały | uint16 | s |
-| 12 | siła na pasie, moc | int16 ×2 | N, W |
+| 10 | elapsed time | uint16 | s |
+| 11 | remaining time | uint16 | s |
+| 12 | belt force, power | int16 ×2 | N, W |
 
-Nachylenie ze znakiem, uzupełnienie do dwóch.
+Inclination is signed, two's complement.
 
-### Sterowanie `0x2AD9`
+### Control `0x2AD9`
 
-Bez `Request Control` maszyna odrzuca komendy kodem `04`.
+Without `Request Control` the machine rejects everything with code `04`.
 
-| Komenda | Bajty |
+| Command | Bytes |
 |---|---|
 | Request Control | `00` |
 | Start / Resume | `07` |
@@ -62,80 +83,70 @@ Bez `Request Control` maszyna odrzuca komendy kodem `04`.
 | Pause | `08 02` |
 | Set Target Speed | `02 LL HH` (km/h ×100, LE) |
 
-Odpowiedź: `80 <op> <kod>`. Kody: `01` ok, `02` nieobsługiwane, `03` zły parametr, `04` brak kontroli, `05` poza zakresem.
+Response: `80 <op> <code>`. Codes: `01` ok, `02` not supported, `03` invalid parameter, `04` control not permitted, `05` out of range.
 
-### Możliwości `0x2ACC`
+### Capabilities `0x2ACC`
 
-UI renderuje kafelki i sterowanie na podstawie mapy bitowej, nie na sztywno (`Features.swift`).
+Tiles and controls render off the bitmap, nothing is hardcoded (`Features.swift`).
 
-Testowane urządzenie zwraca `c4 56 00 00 0f 00 00 00`:
+Test unit reports `c4 56 00 00 0f 00 00 00`:
 
-* nadaje `0x000056C4`: dystans, kroki, opór, kalorie, tętno, czas, moc
-* przyjmuje `0x0000000F`: prędkość, nachylenie, opór, moc
+* transmits `0x000056C4`: distance, step count, resistance, calories, heart rate, elapsed time, power
+* accepts `0x0000000F`: speed, inclination, resistance, power
 
 ### Fitshow `0xFFF1`
 
-STX/ETX, checksum XOR (`FitshowFrame.swift`):
+STX/ETX framing, XOR checksum (`FitshowFrame.swift`):
 
 ```
 02 51 03 3c 00 13 00 0d 00 09 00 00 00 00 00 79 03
 │  │  │  └─┬─┘ └─┬─┘ └─┬─┘ └─┬─┘ └───┬────┘ │  └─ ETX
-│  │  │    │     │     │     │       │      └─ XOR bajtów środka
-│  │  │    │     │     │     │       └─ 5 zer: tętno i nachylenie, nieobsadzone
-│  │  │    │     │     │     └─ kcal ×0,1
-│  │  │    │     │     └─ dystans [m]
-│  │  │    │     └─ czas [s]
-│  │  │    └─ prędkość ×0,1
+│  │  │    │     │     │     │       │      └─ XOR over payload
+│  │  │    │     │     │     │       └─ 5 zero bytes: heart rate and incline, unpopulated
+│  │  │    │     │     │     └─ kcal ×0.1
+│  │  │    │     │     └─ distance [m]
+│  │  │    │     └─ time [s]
+│  │  │    └─ speed ×0.1
 │  │  └─ status
-│  └─ typ ramki, stałe 0x51
+│  └─ frame type, always 0x51
 └─ STX
 ```
 
-Status `0x02` skraca ramkę do odliczania: `02 51 02 05 56 03`.
+Status `0x02` shortens the frame to a countdown digit: `02 51 02 05 56 03`.
 
-Przy obu kanałach FTMS jest źródłem prawdy, z Fitshow brane są tylko kalorie ułamkowe i odliczanie,
-czyli czego FTMS w tym modelu nie podaje.
+With both channels up FTMS is the source of truth; Fitshow contributes only fractional calories and the countdown,
+which this model omits from FTMS.
 
-## 3. Aplikacja
+## 3. App
 
-* autoskan po `0x1826`, reconnect co 2 s
-* kafelki filtrowane przez `Features`, pokazywane tylko realne metryki
-* sterowanie w granicach z `0x2AD4`
-* sesja cięta na segmenty, bo bieżnia zeruje liczniki po każdym stopie; pauza nie kasuje wyniku
-* eksport do `~/treningi/`: `.tcx` (Garmin TCD v2, wchodzi do Stravy) + `.json` na historię
+* auto scan on `0x1826`, reconnect every 2 s
+* tiles filtered through `Features`, only metrics the hardware actually sends
+* speed control clamped to `0x2AD4`
+* session split into segments, since the treadmill zeroes its counters on every stop; pausing does not wipe the total
+* export to `~/treningi/`: `.tcx` (Garmin TCD v2, imports into Strava) plus `.json` for in-app history
 
 ```
-Sources/Bieznia/
+Sources/FTMSTreadmill/
 ├── BLE/
-│   ├── UUIDs.swift           identyfikatory usług i charakterystyk
-│   ├── ByteReader.swift      odczyt little-endian
-│   ├── Commands.swift        komendy i kody odpowiedzi
-│   ├── Features.swift        dekoder 0x2ACC
-│   ├── TreadmillData.swift   parser 0x2ACD
-│   ├── FitshowFrame.swift    parser 0xFFF1
-│   ├── TrainingStatus.swift  fazy treningu 0x2AD3
-│   └── TreadmillClient.swift połączenie, stan, sesja
-├── Export.swift              TCX, JSON, historia
+│   ├── UUIDs.swift           service and characteristic ids
+│   ├── ByteReader.swift      little endian reads
+│   ├── Commands.swift        commands and response codes
+│   ├── Features.swift        0x2ACC decoder
+│   ├── TreadmillData.swift   0x2ACD parser
+│   ├── FitshowFrame.swift    0xFFF1 parser
+│   ├── TrainingStatus.swift  0x2AD3 workout phases
+│   └── TreadmillClient.swift connection, state, session
+├── Export.swift              TCX, JSON, history
 └── UI/                       SwiftUI
 ```
 
-## Build
+Source comments and identifiers are Polish.
 
-macOS 13+, [Swift 5.10+](https://www.swift.org/install/macos/) albo [Xcode](https://apps.apple.com/app/xcode/id497799835).
+## Notes
 
-```bash
-./build-app.sh
-open ~/Applications/Bieznia.app
-```
+FTMS parser follows the SIG spec and should carry over to other hardware. Fitshow is vendor bound.
+Tested against a single treadmill.
 
-Skrypt składa bundla z `Info.plist` i podpisem ad-hoc. Bez `NSBluetoothAlwaysUsageDescription` system utnie dostęp do BLE,
-więc gołe `swift run` zadziała tylko jako proces bez uprawnień.
+## License
 
-## Uwagi
-
-Parser FTMS zgodny ze specyfikacją SIG, powinien wejść na inny sprzęt. Fitshow jest związany z konkretnym producentem.
-Testowane na jednym modelu.
-
-## Licencja
-
-[MIT](LICENSE). Ikona pochodzi z clipartmax, licencja osobna od kodu.
+[MIT](LICENSE). Icon sourced from clipartmax under its own terms, separate from the code.

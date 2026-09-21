@@ -3,11 +3,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "Bieznia",
+    name: "FTMSTreadmill",
 
     platforms: [.macOS(.v13)],
 
     targets: [
-        .executableTarget(name: "Bieznia", path: "Sources/Bieznia")
+        .executableTarget(name: "FTMSTreadmill", path: "Sources/FTMSTreadmill")
     ]
 )
