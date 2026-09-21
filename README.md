@@ -1,4 +1,4 @@
-# Treadmill
+# <img src="https://i.imgur.com/LuP3mDS.png" width="38" valign="middle"> Treadmill
 
 Open source BLE app to control your treadmill from macOS. No vendor app, no account, no cloud.
 Swift + SwiftUI, no dependencies, plain `CoreBluetooth`.
