@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 @main
-struct FTMSTreadmillApp: App {
+struct TreadmillApp: App {
     @StateObject private var treadmill = Treadmill()
 
     init() {
@@ -10,7 +10,7 @@ struct FTMSTreadmillApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("FTMS Treadmill") {
+        WindowGroup("Treadmill") {
             ContentView()
                 .environmentObject(treadmill)
                 .frame(minWidth: 700, minHeight: 480)

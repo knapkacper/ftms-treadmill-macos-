@@ -1,9 +1,9 @@
-# ftms-treadmill-macos
+# Treadmill
 
 Open source BLE app to control your treadmill from macOS. No vendor app, no account, no cloud.
 Swift + SwiftUI, no dependencies, plain `CoreBluetooth`.
 
-![FTMS Treadmill](https://i.imgur.com/siYGcRq.png)
+![Treadmill](https://i.imgur.com/siYGcRq.png)
 
 ## Install
 
@@ -11,7 +11,7 @@ Swift + SwiftUI, no dependencies, plain `CoreBluetooth`.
 git clone https://github.com/knapkacper/ftms-treadmill-macos-.git
 cd ftms-treadmill-macos-
 ./build-app.sh
-open ~/Applications/FTMSTreadmill.app
+open ~/Applications/Treadmill.app
 ```
 
 Update:
@@ -126,7 +126,7 @@ which this model omits from FTMS.
 * export to `~/treningi/`: `.tcx` (Garmin TCD v2, imports into Strava) plus `.json` for in-app history
 
 ```
-Sources/FTMSTreadmill/
+Sources/Treadmill/
 ├── BLE/
 │   ├── UUIDs.swift           service and characteristic ids
 │   ├── ByteReader.swift      little endian reads
