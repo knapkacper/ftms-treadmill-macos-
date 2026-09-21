@@ -7,6 +7,16 @@ Swift + SwiftUI, no dependencies, plain `CoreBluetooth`.
 
 ## Install
 
+Grab `Treadmill.zip` from [Releases](https://github.com/knapkacper/ftms-treadmill-macos-/releases/latest), unzip, drop it in `/Applications`.
+The bundle is ad-hoc signed, not notarized, so Gatekeeper quarantines it on first launch:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Treadmill.app
+open /Applications/Treadmill.app
+```
+
+Or build it yourself:
+
 ```bash
 git clone https://github.com/knapkacper/ftms-treadmill-macos-.git
 cd ftms-treadmill-macos-
