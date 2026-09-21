@@ -140,8 +140,6 @@ Sources/Treadmill/
 └── UI/                       SwiftUI
 ```
 
-UI strings are English; source comments and identifiers are Polish.
-
 ## Notes
 
 FTMS parser follows the SIG spec and should carry over to other hardware. Fitshow is vendor bound.
